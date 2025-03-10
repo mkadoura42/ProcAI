@@ -82,9 +82,38 @@ router.put(
     adminOnly,
     check('name', 'Name is required').optional().not().isEmpty(),
     check('model', 'Model is required').optional().not().isEmpty(),
+    check('provider', 'Provider is required').optional().not().isEmpty(),
+    check('systemPrompt', 'System prompt is required').optional().not().isEmpty(),
+    check('temperature', 'Temperature must be a number between 0 and 1').optional().isFloat({ min: 0, max: 1 }),
+    check('maxTokens', 'Max tokens must be a positive number').optional().isInt({ min: 1 }),
     check('isActive', 'isActive must be a boolean').optional().isBoolean()
   ],
   aiController.updateAgentSettings
+);
+
+/**
+ * @route   GET /api/ai/models
+ * @desc    Get available AI models
+ * @access  Private
+ */
+router.get('/models', auth, aiController.getAvailableModels);
+
+/**
+ * @route   PUT /api/ai/models/:modelId
+ * @desc    Update AI model settings
+ * @access  Private/Admin
+ */
+router.put(
+  '/models/:modelId',
+  [
+    auth,
+    adminOnly,
+    check('name', 'Name is required').optional().not().isEmpty(),
+    check('provider', 'Provider is required').optional().not().isEmpty(),
+    check('description', 'Description is required').optional().not().isEmpty(),
+    check('isActive', 'isActive must be a boolean').optional().isBoolean()
+  ],
+  aiController.updateModelSettings
 );
 
 module.exports = router;

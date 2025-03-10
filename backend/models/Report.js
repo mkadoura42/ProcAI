@@ -34,6 +34,10 @@ const ReportSchema = new mongoose.Schema({
     type: String,
     default: 'GPT-4'
   },
+  aiProvider: {
+    type: String,
+    default: 'openai'
+  },
   status: {
     type: String,
     enum: ['draft', 'final', 'archived'],
@@ -84,6 +88,7 @@ const ReportSchema = new mongoose.Schema({
     content: String,
     agent: String,
     model: String,
+    provider: String,
     timestamp: {
       type: Date,
       default: Date.now

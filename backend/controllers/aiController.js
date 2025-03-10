@@ -25,38 +25,131 @@ exports.analyzeRFP = async (req, res) => {
       return res.status(404).json({ message: 'RFP not found' });
     }
 
-    // Get API settings
-    const apiSettings = await Settings.findOne({ category: 'api', key: 'openai_api_key' });
+    // Get agent settings
+    const agentSettings = await Settings.findOne({ category: 'ai-agents', key: 'compliance-agent' });
 
-    if (!apiSettings || !apiSettings.value) {
-      return res.status(400).json({ message: 'API key not configured' });
+    if (!agentSettings || !agentSettings.value) {
+      return res.status(400).json({ message: 'Agent settings not configured' });
     }
 
-    // In a real implementation, this would call the OpenAI API
+    const agent = typeof agentSettings.value === 'string' ? JSON.parse(agentSettings.value) : agentSettings.value;
+
+    // Get provider and model from agent settings
+    const provider = agent.provider || 'openai';
+    const model = agent.model || 'GPT-4';
+    const systemPrompt = agent.systemPrompt || 'You are a compliance analysis AI agent specialized in reviewing RFPs.';
+    const temperature = agent.temperature || 0.3;
+    const maxTokens = agent.maxTokens || 4000;
+
+    // Get API settings for the selected provider
+    const apiKeySettings = await Settings.findOne({ category: 'api', key: `${provider}_api_key` });
+
+    if (!apiKeySettings || !apiKeySettings.value) {
+      return res.status(400).json({ message: `${provider} API key not configured` });
+    }
+
+    // In a real implementation, this would call the appropriate AI API
     // For this demo, we'll simulate the AI analysis with mock data
 
     /*
-    // Example of how the OpenAI API call would be implemented:
+    // Example of how the API call would be implemented based on provider:
 
-    const openai = new OpenAI({
-      apiKey: apiSettings.value
-    });
+    let analysisResult;
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [
-        {
-          role: "system",
-          content: "You are a compliance analysis AI agent specialized in reviewing RFPs."
-        },
-        {
-          role: "user",
-          content: `Analyze the following RFP for compliance issues:\n\nTitle: ${rfp.title}\n\nDescription: ${rfp.description}\n\nRequirements: ${JSON.stringify(rfp.requirements)}\n\nCompliance Requirements: ${JSON.stringify(rfp.complianceRequirements)}`
-        }
-      ]
-    });
+    switch (provider) {
+      case 'openai':
+        const openai = new OpenAI({
+          apiKey: apiKeySettings.value
+        });
 
-    const analysisResult = completion.choices[0].message.content;
+        const openaiCompletion = await openai.chat.completions.create({
+          model: model,
+          messages: [
+            {
+              role: "system",
+              content: systemPrompt
+            },
+            {
+              role: "user",
+              content: `Analyze the following RFP for compliance issues:\n\nTitle: ${rfp.title}\n\nDescription: ${rfp.description}\n\nRequirements: ${JSON.stringify(rfp.requirements)}\n\nCompliance Requirements: ${JSON.stringify(rfp.complianceRequirements)}`
+            }
+          ],
+          temperature: temperature,
+          max_tokens: maxTokens
+        });
+
+        analysisResult = openaiCompletion.choices[0].message.content;
+        break;
+
+      case 'deepseek':
+        // Get DeepSeek API endpoint
+        const deepseekEndpointSetting = await Settings.findOne({ category: 'api', key: 'deepseek_api_endpoint' });
+        const deepseekEndpoint = deepseekEndpointSetting?.value || 'https://api.deepseek.com/v1';
+
+        // Call DeepSeek API
+        const deepseekResponse = await fetch(`${deepseekEndpoint}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKeySettings.value}`
+          },
+          body: JSON.stringify({
+            model: model,
+            messages: [
+              {
+                role: "system",
+                content: systemPrompt
+              },
+              {
+                role: "user",
+                content: `Analyze the following RFP for compliance issues:\n\nTitle: ${rfp.title}\n\nDescription: ${rfp.description}\n\nRequirements: ${JSON.stringify(rfp.requirements)}\n\nCompliance Requirements: ${JSON.stringify(rfp.complianceRequirements)}`
+              }
+            ],
+            temperature: temperature,
+            max_tokens: maxTokens
+          })
+        });
+
+        const deepseekData = await deepseekResponse.json();
+        analysisResult = deepseekData.choices[0].message.content;
+        break;
+
+      case 'llama':
+        // Get Llama API endpoint
+        const llamaEndpointSetting = await Settings.findOne({ category: 'api', key: 'llama_api_endpoint' });
+        const llamaEndpoint = llamaEndpointSetting?.value || 'https://api.llama.com/v1';
+
+        // Call Llama API
+        const llamaResponse = await fetch(`${llamaEndpoint}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKeySettings.value}`
+          },
+          body: JSON.stringify({
+            model: model,
+            messages: [
+              {
+                role: "system",
+                content: systemPrompt
+              },
+              {
+                role: "user",
+                content: `Analyze the following RFP for compliance issues:\n\nTitle: ${rfp.title}\n\nDescription: ${rfp.description}\n\nRequirements: ${JSON.stringify(rfp.requirements)}\n\nCompliance Requirements: ${JSON.stringify(rfp.complianceRequirements)}`
+              }
+            ],
+            temperature: temperature,
+            max_tokens: maxTokens
+          })
+        });
+
+        const llamaData = await llamaResponse.json();
+        analysisResult = llamaData.choices[0].message.content;
+        break;
+
+      default:
+        throw new Error(`Unsupported AI provider: ${provider}`);
+    }
     */
 
     // Mock analysis result
@@ -111,7 +204,8 @@ exports.analyzeRFP = async (req, res) => {
       relatedRFP: rfp._id,
       relatedRFPReference: rfp.referenceNumber,
       generatedBy: 'compliance-agent',
-      aiModel: 'GPT-4',
+      aiModel: model,
+      aiProvider: provider,
       summary: mockAnalysisResult.summary,
       content: JSON.stringify(mockAnalysisResult),
       score: mockAnalysisResult.score,
@@ -121,8 +215,9 @@ exports.analyzeRFP = async (req, res) => {
         {
           role: 'system',
           content: `I've analyzed the ${rfp.title} RFP document. What would you like to know about it?`,
-          agent: 'Compliance AI Agent',
-          model: 'GPT-4',
+          agent: agent.name || 'Compliance AI Agent',
+          model: model,
+          provider: provider,
           timestamp: new Date()
         }
       ],
@@ -166,11 +261,24 @@ exports.evaluateBid = async (req, res) => {
       return res.status(400).json({ message: 'Bid is not associated with an RFP' });
     }
 
-    // Get API settings
-    const apiSettings = await Settings.findOne({ category: 'api', key: 'openai_api_key' });
+    // Get agent settings
+    const agentSettings = await Settings.findOne({ category: 'ai-agents', key: 'evaluation-agent' });
 
-    if (!apiSettings || !apiSettings.value) {
-      return res.status(400).json({ message: 'API key not configured' });
+    if (!agentSettings || !agentSettings.value) {
+      return res.status(400).json({ message: 'Agent settings not configured' });
+    }
+
+    const agent = typeof agentSettings.value === 'string' ? JSON.parse(agentSettings.value) : agentSettings.value;
+
+    // Get provider and model from agent settings
+    const provider = agent.provider || 'openai';
+    const model = agent.model || 'GPT-4';
+
+    // Get API settings for the selected provider
+    const apiKeySettings = await Settings.findOne({ category: 'api', key: `${provider}_api_key` });
+
+    if (!apiKeySettings || !apiKeySettings.value) {
+      return res.status(400).json({ message: `${provider} API key not configured` });
     }
 
     // In a real implementation, this would call the OpenAI API
@@ -223,7 +331,8 @@ exports.evaluateBid = async (req, res) => {
       relatedBids: [bid._id],
       relatedBidReferences: [bid.referenceNumber],
       generatedBy: 'evaluation-agent',
-      aiModel: 'GPT-4',
+      aiModel: model,
+      aiProvider: provider,
       summary: mockEvaluationResult.summary,
       content: JSON.stringify(mockEvaluationResult),
       score: mockEvaluationResult.score,
@@ -239,8 +348,9 @@ exports.evaluateBid = async (req, res) => {
         {
           role: 'system',
           content: `I've evaluated the bid from ${bid.vendor.name} for the ${bid.rfp.title} RFP. What would you like to know about my analysis?`,
-          agent: 'Evaluation AI Agent',
-          model: 'GPT-4',
+          agent: agent.name || 'Evaluation AI Agent',
+          model: model,
+          provider: provider,
           timestamp: new Date()
         }
       ],
@@ -302,11 +412,24 @@ exports.compareBids = async (req, res) => {
       return res.status(400).json({ message: 'One or more bids not found or not associated with the specified RFP' });
     }
 
-    // Get API settings
-    const apiSettings = await Settings.findOne({ category: 'api', key: 'openai_api_key' });
+    // Get agent settings
+    const agentSettings = await Settings.findOne({ category: 'ai-agents', key: 'comparative-agent' });
 
-    if (!apiSettings || !apiSettings.value) {
-      return res.status(400).json({ message: 'API key not configured' });
+    if (!agentSettings || !agentSettings.value) {
+      return res.status(400).json({ message: 'Agent settings not configured' });
+    }
+
+    const agent = typeof agentSettings.value === 'string' ? JSON.parse(agentSettings.value) : agentSettings.value;
+
+    // Get provider and model from agent settings
+    const provider = agent.provider || 'openai';
+    const model = agent.model || 'GPT-4';
+
+    // Get API settings for the selected provider
+    const apiKeySettings = await Settings.findOne({ category: 'api', key: `${provider}_api_key` });
+
+    if (!apiKeySettings || !apiKeySettings.value) {
+      return res.status(400).json({ message: `${provider} API key not configured` });
     }
 
     // In a real implementation, this would call the OpenAI API
@@ -392,7 +515,8 @@ exports.compareBids = async (req, res) => {
       relatedBids: bids.map(bid => bid._id),
       relatedBidReferences: bids.map(bid => bid.referenceNumber),
       generatedBy: 'comparative-agent',
-      aiModel: 'GPT-4',
+      aiModel: model,
+      aiProvider: provider,
       summary: mockComparisonResult.summary,
       content: JSON.stringify(mockComparisonResult),
       score: Math.round((mockComparisonResult.bidSummaries.reduce((sum, bid) => sum + bid.totalScore, 0) / bids.length)),
@@ -408,8 +532,9 @@ exports.compareBids = async (req, res) => {
         {
           role: 'system',
           content: `I've compared ${bids.length} bids for the ${rfp.title} RFP. What would you like to know about my analysis?`,
-          agent: 'Comparative AI Agent',
-          model: 'GPT-4',
+          agent: agent.name || 'Comparative AI Agent',
+          model: model,
+          provider: provider,
           timestamp: new Date()
         }
       ],
@@ -459,13 +584,6 @@ exports.chatWithAI = async (req, res) => {
       return res.status(403).json({ message: 'You do not have permission to access this report' });
     }
 
-    // Get API settings
-    const apiSettings = await Settings.findOne({ category: 'api', key: 'openai_api_key' });
-
-    if (!apiSettings || !apiSettings.value) {
-      return res.status(400).json({ message: 'API key not configured' });
-    }
-
     // Add user message to chat history
     const userMessage = {
       role: 'user',
@@ -475,15 +593,37 @@ exports.chatWithAI = async (req, res) => {
 
     report.chatHistory.push(userMessage);
 
-    // In a real implementation, this would call the OpenAI API
-    // For this demo, we'll simulate the AI response with mock data
+    // Get agent settings
+    const agentId = agent || report.generatedBy;
+    const agentSettings = await Settings.findOne({ category: 'ai-agents', key: agentId });
+
+    if (!agentSettings || !agentSettings.value) {
+      return res.status(400).json({ message: 'Agent settings not configured' });
+    }
+
+    const agentConfig = typeof agentSettings.value === 'string' ? JSON.parse(agentSettings.value) : agentSettings.value;
+
+    // Get provider and model from agent settings
+    const provider = agentConfig.provider || 'openai';
+    const model = agentConfig.model || 'GPT-4';
+    const systemPrompt = agentConfig.systemPrompt || `You are an AI assistant analyzing a ${report.type} report.`;
+    const temperature = agentConfig.temperature || 0.3;
+    const maxTokens = agentConfig.maxTokens || 4000;
+
+    // Get API settings for the selected provider
+    const apiKeySettings = await Settings.findOne({ category: 'api', key: `${provider}_api_key` });
+
+    if (!apiKeySettings || !apiKeySettings.value) {
+      return res.status(400).json({ message: `${provider} API key not configured` });
+    }
+
+    // In a real implementation, this would call the appropriate AI API
+    // For this demo, we'll simulate the AI analysis with mock data
 
     /*
-    // Example of how the OpenAI API call would be implemented:
+    // Example of how the API call would be implemented based on provider:
 
-    const openai = new OpenAI({
-      apiKey: apiSettings.value
-    });
+    let aiResponse;
 
     // Prepare context from report content
     const reportContent = JSON.parse(report.content);
@@ -498,37 +638,97 @@ exports.chatWithAI = async (req, res) => {
     // Add system message with context
     chatMessages.unshift({
       role: "system",
-      content: `You are an AI assistant analyzing a ${report.type} report. Here is the context:\n\n${context}`
+      content: `${systemPrompt} Here is the context:\n\n${context}`
     });
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: chatMessages
-    });
+    switch (provider) {
+      case 'openai':
+        const openai = new OpenAI({
+          apiKey: apiKeySettings.value
+        });
 
-    const aiResponse = completion.choices[0].message.content;
+        const openaiCompletion = await openai.chat.completions.create({
+          model: model,
+          messages: chatMessages,
+          temperature: temperature,
+          max_tokens: maxTokens
+        });
+
+        aiResponse = openaiCompletion.choices[0].message.content;
+        break;
+
+      case 'deepseek':
+        // Get DeepSeek API endpoint
+        const deepseekEndpointSetting = await Settings.findOne({ category: 'api', key: 'deepseek_api_endpoint' });
+        const deepseekEndpoint = deepseekEndpointSetting?.value || 'https://api.deepseek.com/v1';
+
+        // Call DeepSeek API
+        const deepseekResponse = await fetch(`${deepseekEndpoint}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKeySettings.value}`
+          },
+          body: JSON.stringify({
+            model: model,
+            messages: chatMessages,
+            temperature: temperature,
+            max_tokens: maxTokens
+          })
+        });
+
+        const deepseekData = await deepseekResponse.json();
+        aiResponse = deepseekData.choices[0].message.content;
+        break;
+
+      case 'llama':
+        // Get Llama API endpoint
+        const llamaEndpointSetting = await Settings.findOne({ category: 'api', key: 'llama_api_endpoint' });
+        const llamaEndpoint = llamaEndpointSetting?.value || 'https://api.llama.com/v1';
+
+        // Call Llama API
+        const llamaResponse = await fetch(`${llamaEndpoint}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKeySettings.value}`
+          },
+          body: JSON.stringify({
+            model: model,
+            messages: chatMessages,
+            temperature: temperature,
+            max_tokens: maxTokens
+          })
+        });
+
+        const llamaData = await llamaResponse.json();
+        aiResponse = llamaData.choices[0].message.content;
+        break;
+
+      default:
+        throw new Error(`Unsupported AI provider: ${provider}`);
+    }
     */
 
     // Mock AI response
     let aiResponse;
-    const selectedAgent = agent || report.generatedBy;
     let agentName;
 
-    switch (selectedAgent) {
+    switch (agentId) {
       case 'compliance-agent':
-        agentName = 'Compliance AI Agent';
+        agentName = agentConfig.name || 'Compliance AI Agent';
         aiResponse = "Based on my analysis of the compliance issues in this document, I can provide more specific recommendations for addressing the gaps identified. Would you like me to focus on a particular area of concern, such as data security, accessibility standards, or SLA definitions?";
         break;
       case 'evaluation-agent':
-        agentName = 'Evaluation AI Agent';
+        agentName = agentConfig.name || 'Evaluation AI Agent';
         aiResponse = "I've evaluated this bid against the RFP requirements and can provide more details on specific strengths and weaknesses. The technical approach is strong, but there are some pricing concerns that might need further negotiation. Would you like me to elaborate on any particular aspect of the evaluation?";
         break;
       case 'comparative-agent':
-        agentName = 'Comparative AI Agent';
+        agentName = agentConfig.name || 'Comparative AI Agent';
         aiResponse = "My comparison of the bids shows significant variations in technical approach and pricing. While one vendor offers superior technical capabilities, another provides better value for money. I can provide a more detailed breakdown of how each vendor performs against specific evaluation criteria if that would be helpful.";
         break;
       default:
-        agentName = 'AI Agent';
+        agentName = agentConfig.name || 'AI Agent';
         aiResponse = "I've analyzed the document and can provide insights based on the content. Please let me know what specific aspects you'd like me to elaborate on.";
     }
 
@@ -537,7 +737,8 @@ exports.chatWithAI = async (req, res) => {
       role: 'system',
       content: aiResponse,
       agent: agentName,
-      model: 'GPT-4',
+      model: model,
+      provider: provider,
       timestamp: new Date()
     };
 
@@ -566,6 +767,10 @@ exports.getAgentSettings = async (req, res) => {
     // Get agent settings from database
     const agentSettings = await Settings.find({ category: 'ai-agents' });
 
+    // Get available models
+    const modelsSettings = await Settings.findOne({ category: 'ai-models', key: 'available_models' });
+    const availableModels = modelsSettings?.value || [];
+
     // If no settings found, return default settings
     if (!agentSettings || agentSettings.length === 0) {
       const defaultAgents = [
@@ -574,6 +779,10 @@ exports.getAgentSettings = async (req, res) => {
           name: 'Compliance AI Agent',
           description: 'Analyzes documents for compliance with regulations and requirements',
           model: 'GPT-4',
+          provider: 'openai',
+          systemPrompt: 'You are a compliance analysis AI agent specialized in reviewing RFPs and other procurement documents.',
+          temperature: 0.3,
+          maxTokens: 4000,
           isActive: true
         },
         {
@@ -581,6 +790,10 @@ exports.getAgentSettings = async (req, res) => {
           name: 'Evaluation AI Agent',
           description: 'Evaluates bids against RFP requirements and scoring criteria',
           model: 'GPT-4',
+          provider: 'openai',
+          systemPrompt: 'You are an evaluation AI agent specialized in analyzing bids against RFP requirements.',
+          temperature: 0.2,
+          maxTokens: 4000,
           isActive: true
         },
         {
@@ -588,11 +801,47 @@ exports.getAgentSettings = async (req, res) => {
           name: 'Comparative AI Agent',
           description: 'Compares multiple bids to identify strengths, weaknesses, and best value',
           model: 'GPT-4',
+          provider: 'openai',
+          systemPrompt: 'You are a comparative analysis AI agent specialized in comparing multiple bids for an RFP.',
+          temperature: 0.2,
+          maxTokens: 4000,
           isActive: true
         }
       ];
 
-      return res.json(defaultAgents);
+      return res.json({
+        agents: defaultAgents,
+        models: [
+          {
+            id: 'gpt-4',
+            name: 'GPT-4',
+            provider: 'openai',
+            description: 'OpenAI GPT-4 model',
+            isActive: true
+          },
+          {
+            id: 'gpt-3.5-turbo',
+            name: 'GPT-3.5 Turbo',
+            provider: 'openai',
+            description: 'OpenAI GPT-3.5 Turbo model',
+            isActive: true
+          },
+          {
+            id: 'deepseek-r1',
+            name: 'DeepSeek R1',
+            provider: 'deepseek',
+            description: 'DeepSeek R1 model',
+            isActive: true
+          },
+          {
+            id: 'llama-3.3-70b',
+            name: 'Llama 3.3 70B',
+            provider: 'llama',
+            description: 'Llama 3.3 70B model',
+            isActive: true
+          }
+        ]
+      });
     }
 
     // Format agent settings
@@ -603,11 +852,18 @@ exports.getAgentSettings = async (req, res) => {
         name: value.name,
         description: value.description,
         model: value.model,
+        provider: value.provider,
+        systemPrompt: value.systemPrompt,
+        temperature: value.temperature,
+        maxTokens: value.maxTokens,
         isActive: value.isActive
       };
     });
 
-    res.json(agents);
+    res.json({
+      agents: agents,
+      models: availableModels
+    });
   } catch (error) {
     console.error('Get agent settings error:', error.message);
     res.status(500).json({ message: 'Server error' });
@@ -625,39 +881,43 @@ exports.updateAgentSettings = async (req, res) => {
     return res.status(400).json({ errors: errors.array() });
   }
 
-  const { name, description, model, isActive } = req.body;
   const { agentId } = req.params;
+  const { name, model, provider, systemPrompt, temperature, maxTokens, isActive } = req.body;
 
   try {
     // Find agent settings
     let agentSettings = await Settings.findOne({ category: 'ai-agents', key: agentId });
 
-    // If agent settings not found, create new settings
     if (!agentSettings) {
+      // Create new agent settings if not found
       agentSettings = new Settings({
         category: 'ai-agents',
         key: agentId,
-        value: {
-          name: name || agentId,
-          description: description || '',
+        value: JSON.stringify({
+          name: name || `${agentId.charAt(0).toUpperCase() + agentId.slice(1).replace(/-/g, ' ')} Agent`,
+          description: `AI agent for ${agentId.replace(/-/g, ' ')}`,
           model: model || 'GPT-4',
+          provider: provider || 'openai',
+          systemPrompt: systemPrompt || `You are an AI assistant for ${agentId.replace(/-/g, ' ')}.`,
+          temperature: temperature || 0.3,
+          maxTokens: maxTokens || 4000,
           isActive: isActive !== undefined ? isActive : true
-        },
-        updatedBy: req.user.id
+        })
       });
     } else {
-      // Update existing settings
+      // Update existing agent settings
       const value = typeof agentSettings.value === 'string' ? JSON.parse(agentSettings.value) : agentSettings.value;
 
-      agentSettings.value = {
-        ...value,
-        name: name || value.name,
-        description: description || value.description,
-        model: model || value.model,
-        isActive: isActive !== undefined ? isActive : value.isActive
-      };
+      // Update only provided fields
+      if (name) value.name = name;
+      if (model) value.model = model;
+      if (provider) value.provider = provider;
+      if (systemPrompt) value.systemPrompt = systemPrompt;
+      if (temperature !== undefined) value.temperature = temperature;
+      if (maxTokens !== undefined) value.maxTokens = maxTokens;
+      if (isActive !== undefined) value.isActive = isActive;
 
-      agentSettings.updatedBy = req.user.id;
+      agentSettings.value = JSON.stringify(value);
     }
 
     await agentSettings.save();
@@ -666,14 +926,132 @@ exports.updateAgentSettings = async (req, res) => {
       message: 'Agent settings updated successfully',
       agent: {
         id: agentId,
-        name: agentSettings.value.name,
-        description: agentSettings.value.description,
-        model: agentSettings.value.model,
-        isActive: agentSettings.value.isActive
+        ...JSON.parse(agentSettings.value)
       }
     });
   } catch (error) {
     console.error('Update agent settings error:', error.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+/**
+ * Get available AI models
+ * @route GET /api/ai/models
+ * @access Private
+ */
+exports.getAvailableModels = async (req, res) => {
+  try {
+    // Get models settings from database
+    const modelsSettings = await Settings.findOne({ category: 'ai-models', key: 'available_models' });
+
+    // If no settings found, return default models
+    if (!modelsSettings || !modelsSettings.value) {
+      const defaultModels = [
+        {
+          id: 'gpt-4',
+          name: 'GPT-4',
+          provider: 'openai',
+          description: 'OpenAI GPT-4 model',
+          isActive: true
+        },
+        {
+          id: 'gpt-3.5-turbo',
+          name: 'GPT-3.5 Turbo',
+          provider: 'openai',
+          description: 'OpenAI GPT-3.5 Turbo model',
+          isActive: true
+        },
+        {
+          id: 'deepseek-r1',
+          name: 'DeepSeek R1',
+          provider: 'deepseek',
+          description: 'DeepSeek R1 model',
+          isActive: true
+        },
+        {
+          id: 'llama-3.3-70b',
+          name: 'Llama 3.3 70B',
+          provider: 'llama',
+          description: 'Llama 3.3 70B model',
+          isActive: true
+        }
+      ];
+
+      return res.json({ models: defaultModels });
+    }
+
+    // Parse models settings
+    const models = typeof modelsSettings.value === 'string' ? JSON.parse(modelsSettings.value) : modelsSettings.value;
+
+    res.json({ models });
+  } catch (error) {
+    console.error('Get available models error:', error.message);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+/**
+ * Update AI model settings
+ * @route PUT /api/ai/models/:modelId
+ * @access Private/Admin
+ */
+exports.updateModelSettings = async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+
+  const { modelId } = req.params;
+  const { name, provider, description, isActive } = req.body;
+
+  try {
+    // Get models settings
+    let modelsSettings = await Settings.findOne({ category: 'ai-models', key: 'available_models' });
+
+    let models = [];
+
+    if (modelsSettings && modelsSettings.value) {
+      models = typeof modelsSettings.value === 'string' ? JSON.parse(modelsSettings.value) : modelsSettings.value;
+    } else {
+      // Create new models settings if not found
+      modelsSettings = new Settings({
+        category: 'ai-models',
+        key: 'available_models',
+        value: JSON.stringify([])
+      });
+    }
+
+    // Find model in the list
+    const modelIndex = models.findIndex(model => model.id === modelId);
+
+    if (modelIndex === -1) {
+      // Add new model if not found
+      models.push({
+        id: modelId,
+        name: name || modelId,
+        provider: provider || 'openai',
+        description: description || `AI model ${modelId}`,
+        isActive: isActive !== undefined ? isActive : true
+      });
+    } else {
+      // Update existing model
+      if (name) models[modelIndex].name = name;
+      if (provider) models[modelIndex].provider = provider;
+      if (description) models[modelIndex].description = description;
+      if (isActive !== undefined) models[modelIndex].isActive = isActive;
+    }
+
+    // Save updated models
+    modelsSettings.value = JSON.stringify(models);
+    await modelsSettings.save();
+
+    res.json({
+      message: 'Model settings updated successfully',
+      model: models.find(model => model.id === modelId)
+    });
+  } catch (error) {
+    console.error('Update model settings error:', error.message);
     res.status(500).json({ message: 'Server error' });
   }
 };

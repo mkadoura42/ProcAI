@@ -1,5 +1,5 @@
-import { Sidebar } from "@/components/shared/sidebar"
-import { TopBar } from "@/components/shared/topbar"
+import { Sidebar } from "@/components/shared/sidebar";
+import { TopBar } from "@/components/shared/topbar";
 
 export default function AuthLayout({
   children,

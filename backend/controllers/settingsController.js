@@ -269,6 +269,46 @@ exports.initializeSettings = async (req, res) => {
         isEncrypted: false,
         isSystem: true
       },
+      {
+        category: 'api',
+        key: 'deepseek_api_key',
+        value: '',
+        description: 'DeepSeek API Key',
+        isEncrypted: true,
+        isSystem: true
+      },
+      {
+        category: 'api',
+        key: 'deepseek_api_endpoint',
+        value: 'https://api.deepseek.com/v1',
+        description: 'DeepSeek API Endpoint',
+        isEncrypted: false,
+        isSystem: true
+      },
+      {
+        category: 'api',
+        key: 'llama_api_key',
+        value: '',
+        description: 'Llama API Key',
+        isEncrypted: true,
+        isSystem: true
+      },
+      {
+        category: 'api',
+        key: 'llama_api_endpoint',
+        value: 'https://api.llama.com/v1',
+        description: 'Llama API Endpoint',
+        isEncrypted: false,
+        isSystem: true
+      },
+      {
+        category: 'api',
+        key: 'default_ai_provider',
+        value: 'openai',
+        description: 'Default AI Provider (openai, deepseek, llama)',
+        isEncrypted: false,
+        isSystem: true
+      },
 
       // Reference code settings
       {
@@ -304,6 +344,10 @@ exports.initializeSettings = async (req, res) => {
           name: 'Compliance AI Agent',
           description: 'Analyzes documents for compliance with regulations and requirements',
           model: 'GPT-4',
+          provider: 'openai',
+          systemPrompt: 'You are a compliance analysis AI agent specialized in reviewing RFPs and other procurement documents.',
+          temperature: 0.3,
+          maxTokens: 4000,
           isActive: true
         },
         description: 'Settings for Compliance AI Agent',
@@ -317,6 +361,10 @@ exports.initializeSettings = async (req, res) => {
           name: 'Evaluation AI Agent',
           description: 'Evaluates bids against RFP requirements and scoring criteria',
           model: 'GPT-4',
+          provider: 'openai',
+          systemPrompt: 'You are an evaluation AI agent specialized in analyzing bids against RFP requirements.',
+          temperature: 0.2,
+          maxTokens: 4000,
           isActive: true
         },
         description: 'Settings for Evaluation AI Agent',
@@ -330,9 +378,50 @@ exports.initializeSettings = async (req, res) => {
           name: 'Comparative AI Agent',
           description: 'Compares multiple bids to identify strengths, weaknesses, and best value',
           model: 'GPT-4',
+          provider: 'openai',
+          systemPrompt: 'You are a comparative analysis AI agent specialized in comparing multiple bids for an RFP.',
+          temperature: 0.2,
+          maxTokens: 4000,
           isActive: true
         },
         description: 'Settings for Comparative AI Agent',
+        isEncrypted: false,
+        isSystem: true
+      },
+      {
+        category: 'ai-models',
+        key: 'available_models',
+        value: [
+          {
+            id: 'gpt-4',
+            name: 'GPT-4',
+            provider: 'openai',
+            description: 'OpenAI GPT-4 model',
+            isActive: true
+          },
+          {
+            id: 'gpt-3.5-turbo',
+            name: 'GPT-3.5 Turbo',
+            provider: 'openai',
+            description: 'OpenAI GPT-3.5 Turbo model',
+            isActive: true
+          },
+          {
+            id: 'deepseek-r1',
+            name: 'DeepSeek R1',
+            provider: 'deepseek',
+            description: 'DeepSeek R1 model',
+            isActive: true
+          },
+          {
+            id: 'llama-3.3-70b',
+            name: 'Llama 3.3 70B',
+            provider: 'llama',
+            description: 'Llama 3.3 70B model',
+            isActive: true
+          }
+        ],
+        description: 'Available AI models',
         isEncrypted: false,
         isSystem: true
       },
